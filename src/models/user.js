@@ -11,7 +11,7 @@ const userSchema = new Schema(
       required: true,
       unique: true,
       trim: true,
-      index: true, //enable searching field
+      index: true, // enable searching on this field
     },
     fullName: {
       type: String,
@@ -34,7 +34,7 @@ const userSchema = new Schema(
     },
     role: {
       type: String,
-      enum: APPLICATION_ROLE,
+      enum: APPLICATION_ROLE, // Ensure 'production' is included in APPLICATION_ROLE
       required: true,
     },
     totalTargetCompleted: {

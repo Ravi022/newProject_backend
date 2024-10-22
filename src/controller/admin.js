@@ -1,8 +1,17 @@
 import { asynchandler } from "../utils/asynchandler.js";
-import { ApiError } from "../utils/apierror.js";
 import { Target } from "../models/target.js";
 import { User } from "../models/user.js";
+import { FileUpload } from "../models/uploadDocument.js";
 import { GlobalPermission } from "../models/permission.js";
+import AWS from "aws-sdk";
+import path from "path";
+
+// Initialize AWS S3
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID, // Your AWS Access Key
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY, // Your AWS Secret Access Key
+  region: process.env.AWS_REGION, // Your S3 bucket region
+});
 
 //jobId of salesperson(jobId),target of current month (target)
 const assignMonthlyTargetToSalesperson = asynchandler(async (req, res) => {
@@ -163,8 +172,134 @@ const setTaskAssignmentPermission = asynchandler(async (req, res) => {
   }
 });
 
+const canSalespersonAddTasks = asynchandler(async (req, res) => {
+  try {
+    const { jobId } = req.user; // Extract jobId from req.user
+
+    // Fetch global permission settings
+    const globalPermission = await GlobalPermission.findOne({});
+
+    // Check if global permission exists
+    if (!globalPermission) {
+      return res.status(404).json({
+        message: "Global permission settings not found.",
+      });
+    }
+
+    // Find the admin by jobId
+    const admin = await User.findOne({ jobId, role: "admin" });
+    if (!admin) {
+      return res.status(404).json({ message: "Admin not found." });
+    }
+
+    // Respond with task assignment permission
+    res.status(200).json({
+      canAssignTasks: globalPermission.canAssignTasks,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error. Please try again later." });
+  }
+});
+
+// Admin view the latest file uploaded for a given fileType (POST request)
+const adminViewFile = asynchandler(async (req, res) => {
+  const { fileType } = req.body; // Get fileType from request body
+  console.log("fileType:", fileType);
+
+  // Find the latest file by fileType
+  const latestFile = await FileUpload.findOne({ fileType })
+    .sort({ uploadedAt: -1 }) // Sort by latest uploaded time
+    .limit(1); // Get the latest file only
+
+  // If no file is found, return an error
+  if (!latestFile) {
+    return res
+      .status(404)
+      .json({ message: `No file found for type ${fileType}` });
+  }
+
+  // Return the latest file's URL and relevant details
+  res.status(200).json({
+    message: "Latest file found",
+    fileType: latestFile.fileType,
+    uploadedAt: latestFile.uploadedAt,
+    s3FileUrl: latestFile.s3FileUrl,
+    s3Key: latestFile.s3Key,
+  });
+});
+
+// Admin download file from S3 using s3Key from request body
+const adminDownloadFile = asynchandler(async (req, res) => {
+  const { s3Key } = req.body; // Get s3Key from request body
+
+  if (!s3Key) {
+    return res.status(400).json({ message: "s3Key is required" });
+  }
+
+  const params = {
+    Bucket: process.env.S3_BUCKET_NAME, // S3 bucket name from env
+    Key: s3Key, // S3 key (path) provided in the request body
+  };
+
+  // Get the file from S3
+  s3.getObject(params, (err, data) => {
+    if (err) {
+      console.error("Error downloading file from S3:", err);
+      return res
+        .status(500)
+        .json({ message: "Error downloading file from S3" });
+    }
+
+    // Set the response headers for downloading the file
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=${path.basename(s3Key)}`
+    );
+    res.setHeader("Content-Type", data.ContentType);
+    console.log("res.Body", data.Body);
+
+    // Send the file data
+    res.send(data.Body);
+  });
+});
+
+//Production Reports from Last 4 Months
+const adminViewLastFourMonthsReports = asynchandler(async (req, res) => {
+  const currentDate = new Date();
+  const fourMonthsAgo = new Date();
+  fourMonthsAgo.setMonth(fourMonthsAgo.getMonth() - 4);
+
+  // Fetch the reports for the last 4 months
+  const reports = await FileUpload.find({
+    fileType: "productionReport",
+    reportYear: { $gte: fourMonthsAgo.getFullYear() },
+    reportMonth: { $gte: fourMonthsAgo.getMonth() + 1 },
+  }).sort({ reportYear: -1, reportMonth: -1 });
+
+  if (!reports || reports.length === 0) {
+    return res
+      .status(404)
+      .json({ message: "No production reports found for the last 4 months" });
+  }
+
+  // Return the list of reports along with file URLs
+  res.status(200).json(
+    reports.map((report) => ({
+      reportMonth: report.reportMonth,
+      reportYear: report.reportYear,
+      uploadedAt: report.uploadedAt,
+      s3FileUrl: report.s3FileUrl, // Return the S3 file URL
+    }))
+  );
+});
+
 export {
   assignMonthlyTargetToSalesperson,
   getMonthlyTargetStats,
   setTaskAssignmentPermission,
+  canSalespersonAddTasks,
+  adminDownloadFile,
+  adminViewLastFourMonthsReports,
+  adminViewFile,
 };
