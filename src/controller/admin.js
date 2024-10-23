@@ -1,6 +1,8 @@
 import { asynchandler } from "../utils/asynchandler.js";
 import { Target } from "../models/target.js";
 import { User } from "../models/user.js";
+import { Task } from "../models/task.js";
+import { MTD } from "../models/mtd.js";
 import { FileUpload } from "../models/uploadDocument.js";
 import { GlobalPermission } from "../models/permission.js";
 import AWS from "aws-sdk";
@@ -172,6 +174,7 @@ const setTaskAssignmentPermission = asynchandler(async (req, res) => {
   }
 });
 
+//set permission
 const canSalespersonAddTasks = asynchandler(async (req, res) => {
   try {
     const { jobId } = req.user; // Extract jobId from req.user
@@ -294,6 +297,90 @@ const adminViewLastFourMonthsReports = asynchandler(async (req, res) => {
   );
 });
 
+// Controller for adminViewTasks
+const adminViewTasks = async (req, res) => {
+  try {
+    // Extract body parameters
+    const { date, month, year, jobId } = req.body;
+
+    // Validate required parameters
+    if (!date || !month || !year || !jobId) {
+      return res.status(400).json({ message: "Missing required parameters." });
+    }
+
+    // Fetch user based on jobId
+    const user = await User.findOne({ jobId });
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Create a Date object for the specified day
+    const selectedDate = new Date(year, month - 1, date);
+
+    // Find all tasks for the user on the selected date
+    const tasks = await Task.find({
+      userId: user._id,
+      date: {
+        $gte: new Date(selectedDate.setHours(0, 0, 0, 0)),
+        $lt: new Date(selectedDate.setHours(23, 59, 59, 999)),
+      },
+    });
+
+    // Categorize tasks into completed, incomplete, and extra
+    const completedTasks = tasks.filter(
+      (task) => task.isCompleted && !task.isExtraTask
+    );
+    const incompleteTasks = tasks.filter((task) => !task.isCompleted);
+    const extraTasks = tasks.filter(
+      (task) => task.isExtraTask && task.isCompleted
+    );
+
+    // Return the response with categorized tasks
+    res.status(200).json({
+      date: selectedDate.toISOString().split("T")[0],
+      jobId: user.jobId,
+      tasks: tasks.map((task) => ({
+        taskId: task._id,
+        taskDescription: task.description,
+        status: task.isCompleted ? "completed" : "pending",
+      })),
+      completedTasks: completedTasks.map((task) => ({
+        taskId: task._id,
+        taskDescription: task.description,
+      })),
+      incompleteTasks: incompleteTasks.map((task) => ({
+        taskId: task._id,
+        taskDescription: task.description,
+      })),
+      extraTasks: extraTasks.map((task) => ({
+        taskId: task._id,
+        taskDescription: task.description,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching tasks:", error);
+    res.status(500).json({ message: "Server error. Please try again later." });
+  }
+};
+
+// Admin fetches all MTD values
+const getMTDValues = asynchandler(async (req, res) => {
+  const mtdValues = await MTD.find().populate("updatedBy", "fullName");
+
+  if (!mtdValues || mtdValues.length === 0) {
+    return res.status(404).json({ message: "No MTD values found" });
+  }
+
+  res.status(200).json(
+    mtdValues.map((mtd) => ({
+      mtdType: mtd.mtdType,
+      value: mtd.value,
+      updatedBy: mtd.updatedBy.fullName,
+      updatedAt: mtd.updatedAt,
+    }))
+  );
+});
+
 export {
   assignMonthlyTargetToSalesperson,
   getMonthlyTargetStats,
@@ -302,4 +389,6 @@ export {
   adminDownloadFile,
   adminViewLastFourMonthsReports,
   adminViewFile,
+  adminViewTasks,
+  getMTDValues,
 };

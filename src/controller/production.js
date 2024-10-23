@@ -6,6 +6,7 @@ import fs from "fs";
 import { fileURLToPath } from "url"; // Required to define __dirname in ES modules
 import { FileUpload } from "../models/uploadDocument.js";
 import { asynchandler } from "../utils/asynchandler.js";
+import { MTD } from "../models/mtd.js";
 
 // Define __dirname for ES module
 const __filename = fileURLToPath(import.meta.url);
@@ -53,7 +54,13 @@ const uploadToS3 = (filePath, s3Key, contentType) => {
 };
 
 // Function to generate S3 Key based on fileType
-const generateS3Key = (fileType, userId, originalFilename, reportMonth, reportYear) => {
+const generateS3Key = (
+  fileType,
+  userId,
+  originalFilename,
+  reportMonth,
+  reportYear
+) => {
   let s3Key = `${fileType}/${userId}/`;
 
   // If the fileType is a productionReport, append the reportMonth and reportYear
@@ -69,16 +76,24 @@ const generateS3Key = (fileType, userId, originalFilename, reportMonth, reportYe
 
 // Function to handle file upload for production
 const uploadFileForProduction = asynchandler(async (req, res) => {
+  console.log("ravi");
   const { fileType, reportMonth, reportYear } = req.body;
   const { file } = req;
   const userId = req.user._id;
-
+  console.log("userId:", userId);
+  console.log("fileType:", fileType);
   if (!file) {
     return res.status(400).json({ message: "File is required" });
   }
 
   // Generate the S3 key based on fileType and other parameters
-  const s3Key = generateS3Key(fileType, userId, file.originalname, reportMonth, reportYear);
+  const s3Key = generateS3Key(
+    fileType,
+    userId,
+    file.originalname,
+    reportMonth,
+    reportYear
+  );
   const localFilePath = path.join(tempDirectory, file.filename);
 
   console.log("S3 key:", s3Key);
@@ -120,4 +135,37 @@ const uploadFileForProduction = asynchandler(async (req, res) => {
   }
 });
 
-export { uploadFileForProduction, upload };
+// Production person updates MTD value
+const updateMTD = asynchandler(async (req, res) => {
+  const { mtdType, value } = req.body;
+  console.log(mtdType, value);
+  const userId = req.user._id; // Assume user ID is coming from authentication
+
+  if (
+    !["dispatchMtd", "productionMtd", "packingMtd", "salesMtd"].includes(
+      mtdType
+    )
+  ) {
+    return res.status(400).json({ message: "Invalid MTD Type" });
+  }
+
+  let mtdRecord = await MTD.findOne({ mtdType });
+
+  if (mtdRecord) {
+    mtdRecord.value = value;
+    mtdRecord.updatedBy = userId;
+  } else {
+    mtdRecord = new MTD({
+      mtdType,
+      value,
+      updatedBy: userId,
+    });
+  }
+
+  await mtdRecord.save();
+  res
+    .status(200)
+    .json({ message: "MTD value updated successfully", mtdRecord });
+});
+
+export { uploadFileForProduction, upload, updateMTD };

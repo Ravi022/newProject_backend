@@ -1,7 +1,10 @@
 import { Router } from "express";
 import multer from "multer"; // Import multer
 import { authProduction, verifyjwt } from "../middleware/auth.js";
-import { uploadFileForProduction } from "../controller/production.js";
+import {
+  uploadFileForProduction,
+  updateMTD,
+} from "../controller/production.js";
 
 // Multer setup for storing files in public/temp
 const storage = multer.diskStorage({
@@ -27,5 +30,8 @@ router
     upload.single("file"),
     uploadFileForProduction
   );
+
+// Route for production personnel to update MTD values
+router.route("/mtd/update").post(verifyjwt, authProduction, updateMTD);
 
 export default router;

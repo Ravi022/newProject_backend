@@ -250,14 +250,22 @@ const assignDailyTasksToSelf = asynchandler(async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Separate tasks into regular and extra tasks
-    const newTasks = tasks.map((task) => ({
-      description: task.description,
-      isCompleted: false, // Newly created tasks are not completed by default
-      isExtraTask: task.isExtraTask || false, // Identify if it's an extra task
-      date: today, // Assign today's date to each task
-      userId: salesperson._id, // Link the task to the salesperson
-    }));
+    // Separate tasks into regular and extra tasks, ensuring descriptions exist
+    const newTasks = tasks.map((task, index) => {
+      if (!task.description || task.description.trim() === "") {
+        throw new Error(
+          `Task description is required for task at index ${index}`
+        );
+      }
+
+      return {
+        description: task.description.trim(),
+        isCompleted: task.isExtraTask ? true : false, // If extra task, mark as completed
+        isExtraTask: task.isExtraTask || false, // Identify if it's an extra task
+        date: today, // Assign today's date to each task
+        userId: salesperson._id, // Link the task to the salesperson
+      };
+    });
 
     // Insert the tasks directly into the Task collection
     await Task.insertMany(newTasks);
@@ -269,6 +277,12 @@ const assignDailyTasksToSelf = asynchandler(async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+
+    if (error.message.startsWith("Task description is required")) {
+      // Handle missing description errors
+      return res.status(400).json({ message: error.message });
+    }
+
     res.status(500).json({ message: "Server error. Please try again later." });
   }
 });
