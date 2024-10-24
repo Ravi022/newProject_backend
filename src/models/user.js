@@ -66,19 +66,30 @@ userSchema.pre("save", async function (next) {
   }
 });
 
-//method funtion
+// method function
 userSchema.methods.isPasswordCorrect = async function (password) {
   try {
     if (!this.password || !password) {
-      throw new ApiError(500, "Password and hash are required");
+      throw new ApiError(400, "Password and hash are required");
     }
-    console.log("password:", password, "this.password", this.password);
-    return await bcrypt.compare(password, this.password);
-  } catch (error) {
-    return new ApiError(
-      500,
-      "Something went wrong while comparing brcypt password"
+
+    console.log(
+      "Comparing password:",
+      password,
+      "with stored hash:",
+      this.password
     );
+
+    const isMatch = await bcrypt.compare(password, this.password);
+
+    if (!isMatch) {
+      throw new ApiError(400, "Invalid password provided");
+    }
+
+    return isMatch; // Return true if the passwords match
+  } catch (error) {
+    console.error("Error comparing passwords:", error.message);
+    throw new ApiError(500, "Error occurred while comparing bcrypt password"); // Throw error to propagate to calling function
   }
 };
 

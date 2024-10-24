@@ -16,11 +16,13 @@ import authRouter from "./routes/Auth.js";
 import userRouter from "./routes/user.js";
 import adminRouter from "./routes/admin.js";
 import productionRouter from "./routes/production.js";
+import commonRouter from "./routes/common.js";
 
 //routes declaration
 app.use("/auth", authRouter);
 app.use("/user", userRouter);
 app.use("/admin", adminRouter);
 app.use("/production", productionRouter);
+app.use("/common", commonRouter);
 
 export { app };

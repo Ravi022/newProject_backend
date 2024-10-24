@@ -199,29 +199,12 @@ const refresh_token = asynchandler(async (req, res) => {
   }
 });
 
-const changeCurrentPassword = asynchandler(async (req, res) => {
-  // old password.
-  // find user validate user.
-  const { newPassword, oldPassword } = req.body;
 
-  const user = await User.findById(req.user._id);
-  if (!user) {
-    throw new ApiError(400, "User not found ");
-  }
-  const isPasswordValid = await user.isPasswordCorrect(oldPassword);
-  if (!isPasswordValid) {
-    throw new ApiError(400, "Invalid Password");
-  }
-  user.password = newPassword;
-  await user.save({ validateBeforeSave: false });
-  return res
-    .status(200)
-    .json(new ApiResponse(200, {}, "Password changed successfully"));
-});
 
 //jobId of salesperson(jobId) , description of target(tasks)
 const assignDailyTasksToSelf = asynchandler(async (req, res) => {
-  const { jobId, tasks } = req.body;
+  const { tasks } = req.body;
+  const jobId = req.user.jobId;
 
   // Validate input
   if (!jobId || !tasks || !Array.isArray(tasks) || tasks.length === 0) {
