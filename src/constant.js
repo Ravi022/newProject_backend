@@ -11,3 +11,5 @@ export const DOCUMENT_TYPE = [
 export const USER_TYPE_PLAYER = "salesperson";
 export const USER_TYPE_PRODUCTION = "production";
 export const USER_TYPE_ADMIN = "admin";
+
+export const PRODUCTION_JOBID = "production";

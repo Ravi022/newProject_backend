@@ -3,7 +3,8 @@ import multer from "multer"; // Import multer
 import { authProduction, verifyjwt } from "../middleware/auth.js";
 import {
   uploadFileForProduction,
-  updateMTD,
+  productionUpdateReport,
+  updateStocksForProduction,
 } from "../controller/production.js";
 
 // Multer setup for storing files in public/temp
@@ -32,6 +33,12 @@ router
   );
 
 // Route for production personnel to update MTD values
-router.route("/mtd/update").post(verifyjwt, authProduction, updateMTD);
+router
+  .route("/mtd/update")
+  .post(verifyjwt, authProduction, productionUpdateReport);
+
+router
+  .route("/stocks/update")
+  .post(verifyjwt, authProduction, updateStocksForProduction);
 
 export default router;

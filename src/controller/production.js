@@ -6,7 +6,8 @@ import fs from "fs";
 import { fileURLToPath } from "url"; // Required to define __dirname in ES modules
 import { FileUpload } from "../models/uploadDocument.js";
 import { asynchandler } from "../utils/asynchandler.js";
-import { MTD } from "../models/mtd.js";
+import { MTDReport } from "../models/mtd.js";
+import { TotalStocks } from "../models/totalStocks.js";
 
 // Define __dirname for ES module
 const __filename = fileURLToPath(import.meta.url);
@@ -135,37 +136,106 @@ const uploadFileForProduction = asynchandler(async (req, res) => {
   }
 });
 
-// Production person updates MTD value
-const updateMTD = asynchandler(async (req, res) => {
-  const { mtdType, value } = req.body;
-  console.log(mtdType, value);
-  const userId = req.user._id; // Assume user ID is coming from authentication
+// Controller for productionUpdateReport
+const productionUpdateReport = async (req, res) => {
+  try {
+    const { year, month, day, mtdType, value } = req.body;
+    const userId = req.user._id;
+    console.log(year, month, day, mtdType, value);
 
-  if (
-    !["dispatchMtd", "productionMtd", "packingMtd", "salesMtd"].includes(
-      mtdType
-    )
-  ) {
-    return res.status(400).json({ message: "Invalid MTD Type" });
+    // Find or create the report for the production user
+    let report = await MTDReport.findOne({ productionUser: userId });
+    if (!report) {
+      report = new MTDReport({
+        productionUser: userId,
+        updatedBy: "production",
+      });
+    }
+
+    // Initialize nested structures if they don't exist
+    if (!report.yearReport) {
+      report.yearReport = {};
+    }
+    if (!report.yearReport[year]) {
+      report.yearReport[year] = { year, months: {}, yearReport: {} };
+    }
+    const yearData = report.yearReport[year];
+
+    if (!yearData.months[month]) {
+      yearData.months[month] = { month, days: {}, monthReport: {} };
+    }
+    const monthData = yearData.months[month];
+
+    if (!monthData.days[day]) {
+      monthData.days[day] = { todayReport: {}, lastUpdated: new Date() };
+    }
+    const dayData = monthData.days[day];
+
+    // Update today's report
+    dayData.todayReport[mtdType] = value;
+    dayData.lastUpdated = new Date();
+
+    // Update cumulative month report till the given day
+    monthData.monthReport[mtdType] =
+      (monthData.monthReport[mtdType] || 0) + value;
+
+    // Update cumulative year report
+    yearData.yearReport[mtdType] = (yearData.yearReport[mtdType] || 0) + value;
+
+    // Save the updated report
+    report.markModified("yearReport");
+    await report.save();
+
+    res.status(200).json({ message: "Report updated successfully." });
+  } catch (error) {
+    console.error("Error updating report:", error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Function to handle stock update for production
+const updateStocksForProduction = asynchandler(async (req, res) => {
+  const { packedStocks, unpackedStocks } = req.body;
+  const userId = req.user._id;
+
+  if (!packedStocks || !unpackedStocks) {
+    return res
+      .status(400)
+      .json({ message: "Packed and unpacked stocks are required" });
   }
 
-  let mtdRecord = await MTD.findOne({ mtdType });
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set time to start of the day
 
-  if (mtdRecord) {
-    mtdRecord.value = value;
-    mtdRecord.updatedBy = userId;
-  } else {
-    mtdRecord = new MTD({
-      mtdType,
-      value,
-      updatedBy: userId,
-    });
+    // Find existing record for today for the user
+    let totalStocks = await TotalStocks.findOne({ user: userId, date: today });
+
+    if (totalStocks) {
+      // Update the existing entry with the new values
+      totalStocks.packedStocks = packedStocks;
+      totalStocks.unpackedStocks = unpackedStocks;
+    } else {
+      // Create a new entry if none exists for today
+      totalStocks = new TotalStocks({
+        user: userId,
+        date: today,
+        packedStocks,
+        unpackedStocks,
+      });
+    }
+
+    await totalStocks.save();
+    res
+      .status(200)
+      .json({ message: "Stocks updated successfully", totalStocks });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
   }
-
-  await mtdRecord.save();
-  res
-    .status(200)
-    .json({ message: "MTD value updated successfully", mtdRecord });
 });
-
-export { uploadFileForProduction, upload, updateMTD };
+export {
+  uploadFileForProduction,
+  upload,
+  productionUpdateReport,
+  updateStocksForProduction,
+};

@@ -8,9 +8,14 @@ import {
   adminDownloadFile,
   adminViewLastFourMonthsReports,
   adminViewTasks,
-  getMTDValues,
+  adminFetchReport,
+  retrieveStocksData,
 } from "../controller/admin.js";
-import { verifyjwt, authAdmin } from "../middleware/auth.js";
+import {
+  verifyjwt,
+  authAdmin,
+  productionJobIdtoAdminAuth,
+} from "../middleware/auth.js";
 import { Task } from "../models/task.js";
 
 const router = Router();
@@ -38,6 +43,12 @@ router.get(
 router.route("/adminViewTasks").post(verifyjwt, authAdmin, adminViewTasks);
 
 // Route for admin to fetch all MTD values
-router.route("/mtd/values").get(verifyjwt, authAdmin, getMTDValues);
+router
+  .route("/mtd/values")
+  .post(verifyjwt, authAdmin, productionJobIdtoAdminAuth, adminFetchReport);
+
+router
+  .route("/stocks/retrieve")
+  .post(verifyjwt, authAdmin, productionJobIdtoAdminAuth, retrieveStocksData);
 
 export default router;

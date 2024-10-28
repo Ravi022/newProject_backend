@@ -2,7 +2,8 @@ import { asynchandler } from "../utils/asynchandler.js";
 import { Target } from "../models/target.js";
 import { User } from "../models/user.js";
 import { Task } from "../models/task.js";
-import { MTD } from "../models/mtd.js";
+import { MTDReport } from "../models/mtd.js";
+import { TotalStocks } from "../models/totalStocks.js";
 import { FileUpload } from "../models/uploadDocument.js";
 import { GlobalPermission } from "../models/permission.js";
 import AWS from "aws-sdk";
@@ -363,22 +364,116 @@ const adminViewTasks = async (req, res) => {
   }
 };
 
-// Admin fetches all MTD values
-const getMTDValues = asynchandler(async (req, res) => {
-  const mtdValues = await MTD.find().populate("updatedBy", "fullName");
+// Controller for adminFetchReport
+const adminFetchReport = async (req, res) => {
+  try {
+    const { year, month, day } = req.body;
+    const userId = req.productionUserId;
 
-  if (!mtdValues || mtdValues.length === 0) {
-    return res.status(404).json({ message: "No MTD values found" });
+    // Validate required parameters
+    if (!userId || !year || !month || !day) {
+      return res.status(400).json({ message: "Missing required parameters." });
+    }
+
+    // Find the report for the production user
+    const report = await MTDReport.findOne({ productionUser: userId }).populate(
+      "productionUser"
+    );
+    if (!report) {
+      return res.status(404).json({ message: "Report not found." });
+    }
+
+    // Extract the required data
+    const yearData = report.yearReport?.[year];
+    if (!yearData) {
+      return res.status(404).json({ message: "Year data not found." });
+    }
+
+    const monthData = yearData.months?.[month];
+    if (!monthData) {
+      return res.status(404).json({ message: "Month data not found." });
+    }
+
+    const dayData = monthData.days?.[day] || { todayReport: {} };
+
+    // Ensure all mtdTypes have a value in dayReport, defaulting to 0 if not found
+    const allMtdTypes = ["totaldispatch", "production", "packing", "sales"];
+    const dayReport = {};
+    allMtdTypes.forEach((type) => {
+      dayReport[type] = dayData.todayReport[type] || 0;
+    });
+
+    // Calculate month-to-date report till the given day
+    const monthReportTillDate = {};
+    allMtdTypes.forEach((type) => {
+      monthReportTillDate[type] = 0;
+      for (let d in monthData.days) {
+        if (parseInt(d) <= parseInt(day)) {
+          monthReportTillDate[type] += monthData.days[d].todayReport[type] || 0;
+        }
+      }
+    });
+
+    // Return the response with the day and month-to-date report
+    res.status(200).json({
+      dayReport: dayReport,
+      monthReportTillDate: monthReportTillDate, // Cumulative MTD value till the given day
+      monthReport: monthData.monthReport, // Total cumulative value for the whole month
+    });
+  } catch (error) {
+    console.error("Error fetching report:", error);
+    res.status(500).json({ message: "Server error. Please try again later." });
+  }
+};
+
+// Controller function to retrieve TotalStocks data
+
+const retrieveStocksData = asynchandler(async (req, res) => {
+  const { date, month, year } = req.body;
+  const productionUserId = req.productionUserId;
+
+  console.log("productionId", productionUserId);
+
+  // Ensure all three inputs (date, month, year) are provided
+  if (!date || !month || !year) {
+    return res.status(400).json({
+      message: "Please provide all fields: date, month, and year.",
+    });
   }
 
-  res.status(200).json(
-    mtdValues.map((mtd) => ({
-      mtdType: mtd.mtdType,
-      value: mtd.value,
-      updatedBy: mtd.updatedBy.fullName,
-      updatedAt: mtd.updatedAt,
-    }))
-  );
+  // Set up the query object based on the provided date, month, and year
+  const query = {
+    user: productionUserId,
+    date: {
+      $gte: new Date(year, month - 1, date, 0, 0, 0, 0),
+      $lt: new Date(year, month - 1, date, 23, 59, 59, 999),
+    },
+  };
+
+  try {
+    const stocksData = await TotalStocks.findOne(query);
+
+    if (!stocksData) {
+      return res
+        .status(404)
+        .json({ message: "No data found for the given date." });
+    }
+
+    // Calculate total stocks (packed + unpacked)
+    const totalStocks = stocksData.packedStocks + stocksData.unpackedStocks;
+
+    // Return the packedStocks, unpackedStocks, and calculated totalStocks
+    res.status(200).json({
+      message: "Stocks data retrieved successfully",
+      data: {
+        packedStocks: stocksData.packedStocks,
+        unpackedStocks: stocksData.unpackedStocks,
+        totalStocks: totalStocks,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
 });
 
 export {
@@ -390,5 +485,6 @@ export {
   adminViewLastFourMonthsReports,
   adminViewFile,
   adminViewTasks,
-  getMTDValues,
+  adminFetchReport,
+  retrieveStocksData,
 };
