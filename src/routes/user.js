@@ -37,6 +37,7 @@ router
   .post(verifyjwt, authSalesperson, markTaskAsCompleted);
 router.route("/addExtraTask").post(verifyjwt, authSalesperson, addExtraTask);
 
+
 //secure routes
 // router.route("/logout").post(verifyjwt, logoutUser);
 // router.route("/refresh-token").post(refresh_token);
