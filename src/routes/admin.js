@@ -10,6 +10,7 @@ import {
   adminViewTasks,
   adminFetchReport,
   retrieveStocksData,
+  getAllMonthlyTargetStats,
 } from "../controller/admin.js";
 import {
   verifyjwt,
@@ -50,5 +51,6 @@ router
 router
   .route("/stocks/retrieve")
   .post(verifyjwt, authAdmin, productionJobIdtoAdminAuth, retrieveStocksData);
+router.route("/barchart").post(verifyjwt, authAdmin, getAllMonthlyTargetStats);
 
 export default router;

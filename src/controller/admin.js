@@ -9,6 +9,27 @@ import { GlobalPermission } from "../models/permission.js";
 import AWS from "aws-sdk";
 import path from "path";
 
+// Salespersons data array
+const salesPersons = [
+  { id: "SP001", name: "Ravikumar N", jobId: "KIOL2238", area: "Bangalore" },
+  { id: "SP002", name: "Sugumar R", jobId: "KIOL2236", area: "Chennai, TN" },
+  { id: "SP003", name: "Vineesh Mehta", jobId: "KIOL2239", area: "Delhi" },
+  {
+    id: "SP004",
+    name: "Soma Naveen Chandra",
+    jobId: "KIOL2070",
+    area: "Hyderabad",
+  },
+  {
+    id: "SP005",
+    name: "Bharat Lal Dubey",
+    jobId: "KIOL2064",
+    area: "Maharashtra",
+  },
+  { id: "SP006", name: "Sushila Shaw", jobId: "KIOL2225", area: "Kolkata" },
+  { id: "SP007", name: "Ardhendu Aditya", jobId: "KIOL2234", area: "Kolkata" },
+];
+
 // Initialize AWS S3
 const s3 = new AWS.S3({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID, // Your AWS Access Key
@@ -476,6 +497,77 @@ const retrieveStocksData = asynchandler(async (req, res) => {
   }
 });
 
+// API to get monthly target stats for all salespersons
+const getAllMonthlyTargetStats = asynchandler(async (req, res) => {
+  const { month, year } = req.body;
+
+  // Validate inputs
+  if (!month || !year) {
+    return res.status(400).json({ message: "Month and year are required." });
+  }
+
+  try {
+    // Get the start and end dates of the month
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+
+    // Initialize an array to store each salesperson's target stats
+    const statsArray = await Promise.all(
+      salesPersons.map(async (person) => {
+        const salesperson = await User.findOne({
+          jobId: person.jobId,
+          role: "salesperson",
+        });
+
+        if (!salesperson) {
+          return {
+            name: person.name,
+            jobId: person.jobId,
+            message: "Salesperson not found",
+          };
+        }
+
+        // Retrieve the target for the specified month and year
+        const monthlyTarget = await Target.findOne({
+          userId: salesperson._id,
+          date: { $gte: startDate, $lte: endDate },
+        });
+
+        if (!monthlyTarget) {
+          return {
+            name: person.name,
+            jobId: person.jobId,
+            message: "No target data found for this month",
+          };
+        }
+
+        // Calculate targets
+        const totalAssignedTarget = monthlyTarget.assignedMonthlyTarget;
+        const totalCompletedTarget = monthlyTarget.dailyCompletedTarget;
+        const totalPendingTarget = totalAssignedTarget - totalCompletedTarget;
+
+        return {
+          name: person.name,
+          jobId: person.jobId,
+          totalAssignedTarget,
+          totalCompletedTarget,
+          totalPendingTarget,
+          tasks: monthlyTarget.tasks || [], // Include task details with completion status
+        };
+      })
+    );
+
+    // Respond with the array of stats
+    res.status(200).json({
+      message: `Monthly target stats for all salespersons for ${month}/${year}`,
+      stats: statsArray,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error. Please try again later." });
+  }
+});
+
 export {
   assignMonthlyTargetToSalesperson,
   getMonthlyTargetStats,
@@ -487,4 +579,5 @@ export {
   adminViewTasks,
   adminFetchReport,
   retrieveStocksData,
+  getAllMonthlyTargetStats,
 };
