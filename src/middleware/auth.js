@@ -23,13 +23,11 @@ const verifyjwt = asynchandler(async (req, _, next) => {
     const user = await User.findById(decodedToken?._id).select(
       "-password -refreshToken"
     );
-    console.log("user from accessToken", user);
 
     if (!user) {
       throw new ApiError(401, "Invalid Access Token");
     }
     req.user = user;
-    // console.log("user :", req.user);
     next();
   } catch (error) {
     throw new ApiError(401, error?.message || "Invalid Access Token");
@@ -58,7 +56,6 @@ const authSalesperson = async (req, res, next) => {
   }
 };
 const authProduction = async (req, res, next) => {
-  console.log("req.user", req.user);
   if (req.user.role === USER_TYPE_PRODUCTION) {
     next();
   } else {
@@ -86,7 +83,6 @@ const productionJobIdtoAdminAuth = async (req, res, next) => {
     req.productionUserId = productionUser._id;
     next();
   } catch (error) {
-    console.error("Error in productionJobIdtoAdminAuth middleware:", error);
     res.status(500).json({ message: "Server error. Please try again later." });
   }
 };

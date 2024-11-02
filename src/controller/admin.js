@@ -8,6 +8,7 @@ import { FileUpload } from "../models/uploadDocument.js";
 import { GlobalPermission } from "../models/permission.js";
 import AWS from "aws-sdk";
 import path from "path";
+import { jobIds } from "../constant.js";
 
 // Salespersons data array
 const salesPersons = [
@@ -448,7 +449,6 @@ const adminFetchReport = async (req, res) => {
 };
 
 // Controller function to retrieve TotalStocks data
-
 const retrieveStocksData = asynchandler(async (req, res) => {
   const { date, month, year } = req.body;
   const productionUserId = req.productionUserId;
@@ -568,6 +568,67 @@ const getAllMonthlyTargetStats = asynchandler(async (req, res) => {
   }
 });
 
+//overall totalmonthlyTargets
+const getTotalMonthlyTargetsOverall = asynchandler(async (req, res) => {
+  const { month, year } = req.body;
+
+  // Validate input
+  if (!month || !year) {
+    return res.status(400).json({
+      message: "Month and year are required.",
+    });
+  }
+
+  try {
+    // Set the start and end dates of the month for querying targets
+    const startOfMonth = new Date(year, month - 1, 1);
+    const endOfMonth = new Date(year, month, 0);
+
+    // Initialize totals
+    let totalAssignedTargets = 0;
+    let totalCompletedTargets = 0;
+    let totalPendingTargets = 0;
+
+    // Loop through each jobId
+    for (const jobId of jobIds) {
+      // Find the salesperson by jobId
+      const salesperson = await User.findOne({ jobId, role: "salesperson" });
+      if (!salesperson) {
+        console.warn(`Salesperson with jobId ${jobId} not found.`);
+        continue; // Skip if salesperson not found
+      }
+
+      // Fetch the monthly target for each salesperson within the specified month
+      const monthlyTarget = await Target.findOne({
+        userId: salesperson._id,
+        date: { $gte: startOfMonth, $lte: endOfMonth },
+        createdby: "admin",
+      });
+
+      // If no target data for the month, skip to the next salesperson
+      if (!monthlyTarget) continue;
+
+      // Accumulate totals
+      totalAssignedTargets += monthlyTarget.assignedMonthlyTarget;
+      totalCompletedTargets += monthlyTarget.dailyCompletedTarget;
+    }
+
+    // Calculate total pending targets
+    totalPendingTargets = totalAssignedTargets - totalCompletedTargets;
+
+    // Respond with the accumulated totals
+    res.status(200).json({
+      message: `Total targets for all salespersons for ${month}/${year}`,
+      totalAssignedTargets,
+      totalCompletedTargets,
+      totalPendingTargets,
+    });
+  } catch (error) {
+    console.error("Error fetching total monthly targets:", error);
+    res.status(500).json({ message: "Server error. Please try again later." });
+  }
+});
+
 export {
   assignMonthlyTargetToSalesperson,
   getMonthlyTargetStats,
@@ -580,4 +641,5 @@ export {
   adminFetchReport,
   retrieveStocksData,
   getAllMonthlyTargetStats,
+  getTotalMonthlyTargetsOverall
 };
