@@ -262,13 +262,7 @@ const updateStocksForProduction = asynchandler(async (req, res) => {
   console.log(packedStocks, unpackedStocks);
 
   // Check that all required fields are provided and valid
-  if (
-    !year ||
-    !month ||
-    !day ||
-    packedStocks === undefined ||
-    unpackedStocks === undefined
-  ) {
+  if (!year || !month || !day || packedStocks===undefined || unpackedStocks===undefined) {
     return res.status(400).json({
       message:
         "Year, month, day, packedStocks, and unpackedStocks are required",
