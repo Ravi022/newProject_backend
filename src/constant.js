@@ -21,8 +21,8 @@ export const salesPersons = [
     jobId: "totalMonthlyDetails",
     area: "Pan India",
   },
-  { id: "SP001", name: "Ravikumar N", jobId: "KIOL2238", area: "Bangalore" },
-  { id: "SP002", name: "Sugumar R", jobId: "KIOL2236", area: "Chennai, TN" },
+  { id: "SP001", name: "salesperson", jobId: "salesperson", area: "Bangalore" },
+  { id: "SP002", name: "salesperson second", jobId: "salesperson2", area: "Chennai, TN" },
   { id: "SP003", name: "Vineesh Mehta", jobId: "KIOL2239", area: "Delhi" },
   {
     id: "SP004",

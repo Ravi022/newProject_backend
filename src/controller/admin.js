@@ -114,60 +114,6 @@ const assignMonthlyTargetToSalesperson = asynchandler(async (req, res) => {
   }
 });
 
-//jobId of salesperson, month, year
-const getMonthlyTargetStats = asynchandler(async (req, res) => {
-  const { jobId, month, year } = req.body;
-
-  // Validate inputs
-  if (!jobId || !month || !year) {
-    return res
-      .status(400)
-      .json({ message: "JobId, month, and year are required." });
-  }
-
-  try {
-    // Find the salesperson by jobId
-    const salesperson = await User.findOne({ jobId, role: "salesperson" });
-    if (!salesperson) {
-      return res.status(404).json({ message: "Salesperson not found." });
-    }
-
-    // Get the start and end date of the month
-    const startDate = new Date(year, month - 1, 1); // First day of the month
-    const endDate = new Date(year, month, 0); // Last day of the month
-
-    // Retrieve the monthly target assigned to the salesperson
-    const monthlyTarget = await Target.findOne({
-      userId: salesperson._id,
-      date: { $gte: startDate, $lte: endDate }, // Ensure it's for the specified month
-    });
-
-    // If no target found for the specified month
-    if (!monthlyTarget) {
-      return res
-        .status(404)
-        .json({ message: "No target data found for this month." });
-    }
-
-    // Calculate pending target
-    const totalAssignedTarget = monthlyTarget.assignedMonthlyTarget;
-    const totalCompletedTarget = monthlyTarget.dailyCompletedTarget;
-    const totalPendingTarget = totalAssignedTarget - totalCompletedTarget;
-
-    // Respond with target stats
-    res.status(200).json({
-      message: `Target data for Job ID: ${jobId} for month/year: ${month}/${year}`,
-      totalAssignedTarget,
-      totalCompletedTarget,
-      totalPendingTarget,
-      tasks: monthlyTarget.tasks, // Include task details with completion status
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error. Please try again later." });
-  }
-});
-
 //canAssignTasks(true/false)
 const setTaskAssignmentPermission = asynchandler(async (req, res) => {
   const { canAssignTasks } = req.body; // Boolean value: true/false
@@ -389,7 +335,7 @@ const adminViewTasks = async (req, res) => {
 // Controller for adminFetchReport
 const adminFetchReport = async (req, res) => {
   try {
-    let { year, month, day } = req.body;
+    const { year, month, day } = req.body;
     const userId = req.productionUserId;
 
     // Validate required parameters
@@ -595,6 +541,7 @@ const getTotalMonthlyTargetsOverall = asynchandler(async (req, res) => {
     // Loop through each jobId
     for (const jobId of jobIds) {
       // Find the salesperson by jobId
+      console.log("jobId", jobId);
       const salesperson = await User.findOne({ jobId, role: "salesperson" });
       if (!salesperson) {
         console.warn(`Salesperson with jobId ${jobId} not found.`);
@@ -628,6 +575,65 @@ const getTotalMonthlyTargetsOverall = asynchandler(async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching total monthly targets:", error);
+    res.status(500).json({ message: "Server error. Please try again later." });
+  }
+});
+
+//jobId of salesperson, month, year
+const getMonthlyTargetStats = asynchandler(async (req, res) => {
+  const { jobId, month, year } = req.body;
+
+  console.log("month,year,jobId", month, year, jobId);
+  // Validate inputs
+  if (!jobId || !month || !year) {
+    return res
+      .status(400)
+      .json({ message: "JobId, month, and year are required." });
+  }
+  // Normalize year and month
+  // year = year.toString().padStart(4, "0"); // Ensure year is a 4-digit string
+  // month = month.toString().padStart(2, "0"); // Ensure month is two digits
+  // console.log("month,year", month, year);
+
+  try {
+    // Find the salesperson by jobId
+    const salesperson = await User.findOne({ jobId, role: "salesperson" });
+    if (!salesperson) {
+      return res.status(404).json({ message: "Salesperson not found." });
+    }
+
+    // Get the start and end date of the month
+    const startDate = new Date(year, month - 1, 1); // First day of the month
+    const endDate = new Date(year, month, 0); // Last day of the month
+
+    // Retrieve the monthly target assigned to the salesperson
+    const monthlyTarget = await Target.findOne({
+      userId: salesperson._id,
+      date: { $gte: startDate, $lte: endDate }, // Ensure it's for the specified month
+    });
+
+    // If no target found for the specified month
+    if (!monthlyTarget) {
+      return res
+        .status(404)
+        .json({ message: "No target data found for this month." });
+    }
+
+    // Calculate pending target
+    const totalAssignedTarget = monthlyTarget.assignedMonthlyTarget;
+    const totalCompletedTarget = monthlyTarget.dailyCompletedTarget;
+    const totalPendingTarget = totalAssignedTarget - totalCompletedTarget;
+
+    // Respond with target stats
+    res.status(200).json({
+      message: `Target data for Job ID: ${jobId} for month/year: ${month}/${year}`,
+      totalAssignedTarget,
+      totalCompletedTarget,
+      totalPendingTarget,
+      tasks: monthlyTarget.tasks, // Include task details with completion status
+    });
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Server error. Please try again later." });
   }
 });

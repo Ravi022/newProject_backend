@@ -26,7 +26,7 @@ router
   .route("/monthlyTarget")
   .post(verifyjwt, authAdmin, assignMonthlyTargetToSalesperson);
 
-router.route("/monthlyStats").post(verifyjwt, authAdmin, getMonthlyTargetStats);
+
 router
   .route("/setTaskPermission")
   .post(verifyjwt, authAdmin, setTaskAssignmentPermission);
@@ -52,9 +52,13 @@ router
 router
   .route("/stocks/retrieve")
   .post(verifyjwt, authAdmin, productionJobIdtoAdminAuth, retrieveStocksData);
+
 router.route("/barchart").post(verifyjwt, authAdmin, getAllMonthlyTargetStats);
+
 router
   .route("/totalStatsOfSalesperson")
   .post(verifyjwt, authAdmin, getTotalMonthlyTargetsOverall);
+
+router.route("/monthlyStats").post(verifyjwt, authAdmin, getMonthlyTargetStats);
 
 export default router;
