@@ -259,13 +259,15 @@ const updateStocksForProduction = asynchandler(async (req, res) => {
   const { year, month, day, packedStocks, unpackedStocks } = req.body;
   const userId = req.user._id;
 
+  console.log(packedStocks, unpackedStocks);
+
   // Check that all required fields are provided and valid
   if (
     !year ||
     !month ||
     !day ||
-    packedStocks  ||
-    unpackedStocks 
+    packedStocks === undefined ||
+    unpackedStocks === undefined
   ) {
     return res.status(400).json({
       message:
