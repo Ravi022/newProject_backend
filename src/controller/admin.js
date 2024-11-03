@@ -389,15 +389,18 @@ const adminViewTasks = async (req, res) => {
 // Controller for adminFetchReport
 const adminFetchReport = async (req, res) => {
   try {
-    const { year, month, day } = req.body;
+    let { year, month, day } = req.body;
     const userId = req.productionUserId;
 
     // Validate required parameters
     if (!userId || !year || !month || !day) {
       return res.status(400).json({ message: "Missing required parameters." });
     }
-
+    // Normalize year, month, and day
+    year = year.toString(); // Ensure year is a string
+    day = day.toString().padStart(2, "0"); // Ensure day is two digits
     // Find the report for the production user
+
     const report = await MTDReport.findOne({ productionUser: userId }).populate(
       "productionUser"
     );
@@ -641,5 +644,5 @@ export {
   adminFetchReport,
   retrieveStocksData,
   getAllMonthlyTargetStats,
-  getTotalMonthlyTargetsOverall
+  getTotalMonthlyTargetsOverall,
 };
