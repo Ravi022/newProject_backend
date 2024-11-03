@@ -335,7 +335,7 @@ const adminViewTasks = async (req, res) => {
 // Controller for adminFetchReport
 const adminFetchReport = async (req, res) => {
   try {
-    const { year, month, day } = req.body;
+    let { year, month, day } = req.body;
     const userId = req.productionUserId;
 
     // Validate required parameters
