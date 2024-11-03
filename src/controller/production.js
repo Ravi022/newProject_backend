@@ -143,6 +143,54 @@ const productionUpdateReport = async (req, res) => {
     const userId = req.user._id;
     console.log(year, month, day, mtdType, value);
 
+    // Validate and normalize year
+    const normalizedYear = year.toString().padStart(4, "0");
+    if (!/^\d{4}$/.test(normalizedYear)) {
+      return res
+        .status(400)
+        .json({ message: "Invalid year format. Must be a 4-digit year." });
+    }
+
+    // Validate and normalize month
+    const validMonths = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    const normalizedMonth =
+      month.charAt(0).toUpperCase() + month.slice(1).toLowerCase();
+    if (!validMonths.includes(normalizedMonth)) {
+      return res
+        .status(400)
+        .json({ message: "Invalid month. Must be the full month name." });
+    }
+
+    // Validate and normalize day
+    const normalizedDay = day.toString().padStart(2, "0");
+    if (!/^(0[1-9]|[12][0-9]|3[01])$/.test(normalizedDay)) {
+      return res
+        .status(400)
+        .json({ message: "Invalid day format. Must be 01-31." });
+    }
+
+    // Validate mtdType
+    const validMtdTypes = ["totaldispatch", "production", "packing", "sales"];
+    if (!validMtdTypes.includes(mtdType)) {
+      return res.status(400).json({
+        message:
+          "Invalid mtdType. Must be one of: totaldispatch, production, packing, sales.",
+      });
+    }
+
     // Find or create the report for the production user
     let report = await MTDReport.findOne({ productionUser: userId });
     if (!report) {
@@ -156,31 +204,44 @@ const productionUpdateReport = async (req, res) => {
     if (!report.yearReport) {
       report.yearReport = {};
     }
-    if (!report.yearReport[year]) {
-      report.yearReport[year] = { year, months: {}, yearReport: {} };
+    if (!report.yearReport[normalizedYear]) {
+      report.yearReport[normalizedYear] = {
+        year: normalizedYear,
+        months: {},
+        yearReport: {},
+      };
     }
-    const yearData = report.yearReport[year];
+    const yearData = report.yearReport[normalizedYear];
 
-    if (!yearData.months[month]) {
-      yearData.months[month] = { month, days: {}, monthReport: {} };
+    if (!yearData.months[normalizedMonth]) {
+      yearData.months[normalizedMonth] = {
+        month: normalizedMonth,
+        days: {},
+        monthReport: {},
+      };
     }
-    const monthData = yearData.months[month];
+    const monthData = yearData.months[normalizedMonth];
 
-    if (!monthData.days[day]) {
-      monthData.days[day] = { todayReport: {}, lastUpdated: new Date() };
+    if (!monthData.days[normalizedDay]) {
+      monthData.days[normalizedDay] = {
+        todayReport: {},
+        lastUpdated: new Date(),
+      };
     }
-    const dayData = monthData.days[day];
+    const dayData = monthData.days[normalizedDay];
+
+    // Check if there is an existing value for mtdType on this day
+    const previousValue = dayData.todayReport[mtdType] || 0;
 
     // Update today's report
     dayData.todayReport[mtdType] = value;
     dayData.lastUpdated = new Date();
 
-    // Update cumulative month report till the given day
+    // Adjust month and year report by subtracting the previous value and adding the new value
     monthData.monthReport[mtdType] =
-      (monthData.monthReport[mtdType] || 0) + value;
-
-    // Update cumulative year report
-    yearData.yearReport[mtdType] = (yearData.yearReport[mtdType] || 0) + value;
+      (monthData.monthReport[mtdType] || 0) - previousValue + value;
+    yearData.yearReport[mtdType] =
+      (yearData.yearReport[mtdType] || 0) - previousValue + value;
 
     // Save the updated report
     report.markModified("yearReport");
@@ -195,31 +256,66 @@ const productionUpdateReport = async (req, res) => {
 
 // Function to handle stock update for production
 const updateStocksForProduction = asynchandler(async (req, res) => {
-  const { packedStocks, unpackedStocks } = req.body;
+  const { year, month, day, packedStocks, unpackedStocks } = req.body;
   const userId = req.user._id;
 
-  if (!packedStocks || !unpackedStocks) {
-    return res
-      .status(400)
-      .json({ message: "Packed and unpacked stocks are required" });
+  // Check that all required fields are provided and valid
+  if (
+    !year ||
+    !month ||
+    !day ||
+    packedStocks  ||
+    unpackedStocks 
+  ) {
+    return res.status(400).json({
+      message:
+        "Year, month, day, packedStocks, and unpackedStocks are required",
+    });
   }
 
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Set time to start of the day
+  // Normalize year, month, and day
+  const normalizedYear = year.toString().padStart(4, "0");
+  const normalizedMonth = month.toString().padStart(2, "0");
+  const normalizedDay = day.toString().padStart(2, "0");
 
-    // Find existing record for today for the user
-    let totalStocks = await TotalStocks.findOne({ user: userId, date: today });
+  // Validate that year, month, and day are in the correct format
+  if (!/^\d{4}$/.test(normalizedYear)) {
+    return res
+      .status(400)
+      .json({ message: "Invalid year format. Must be a 4-digit year." });
+  }
+
+  if (!/^(0[1-9]|1[0-2])$/.test(normalizedMonth)) {
+    return res
+      .status(400)
+      .json({ message: "Invalid month format. Must be 01-12." });
+  }
+
+  if (!/^(0[1-9]|[12][0-9]|3[01])$/.test(normalizedDay)) {
+    return res
+      .status(400)
+      .json({ message: "Invalid day format. Must be 01-31." });
+  }
+
+  // Construct the date from normalized values
+  const date = new Date(
+    `${normalizedYear}-${normalizedMonth}-${normalizedDay}`
+  );
+  date.setHours(0, 0, 0, 0); // Set time to start of the day
+
+  try {
+    // Find existing record for the specified date and user
+    let totalStocks = await TotalStocks.findOne({ user: userId, date });
 
     if (totalStocks) {
-      // Update the existing entry with the new values
+      // Subtract previous values before updating
       totalStocks.packedStocks = packedStocks;
       totalStocks.unpackedStocks = unpackedStocks;
     } else {
-      // Create a new entry if none exists for today
+      // Create a new entry if none exists for the specified date
       totalStocks = new TotalStocks({
         user: userId,
-        date: today,
+        date,
         packedStocks,
         unpackedStocks,
       });
@@ -233,6 +329,7 @@ const updateStocksForProduction = asynchandler(async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 });
+
 export {
   uploadFileForProduction,
   upload,
